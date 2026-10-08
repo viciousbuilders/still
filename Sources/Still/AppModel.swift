@@ -36,7 +36,7 @@ final class AppModel: ObservableObject {
             if websites.isEmpty, let configuration { websites = configuration.domains }
         }
         poller = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor [weak self] in self?.refresh() }
         }
     }
 
