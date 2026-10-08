@@ -1,0 +1,7 @@
+.build/
+dist/
+.DS_Store
+.swiftpm/
+artifacts/*
+!artifacts/menu-dark.png
+!artifacts/menu-light.png
