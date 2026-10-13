@@ -41,9 +41,12 @@ final class AppModel: ObservableObject {
     }
 
     var active: Bool { hasHostsBlock }
+    var needsFirewallUpgrade: Bool {
+        active && !isDemo && !FileManager.default.fileExists(atPath: "/Library/Application Support/Still/firewall.json")
+    }
     var hasChanges: Bool {
         guard let configuration else { return false }
-        return websites.sorted() != configuration.domains.sorted()
+        return needsFirewallUpgrade || websites.sorted() != configuration.domains.sorted()
     }
     var statusDetail: String {
         guard active else { return websites.isEmpty ? "Add websites to your blocklist." : "\(websites.count) \(websites.count == 1 ? "website" : "websites") ready to block." }

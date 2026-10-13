@@ -21,7 +21,7 @@ final class SystemControllerTests: XCTestCase {
         try controller.apply(BlockConfiguration(domains: ["youtube.com"]), helperSource: root)
         let blocked = try String(contentsOf: paths.hosts)
         XCTAssertTrue(blocked.contains("www.youtube.com"))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: paths.daemon.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: paths.daemon.path))
         try (blocked + "10.0.0.2 new.company.com\n").write(to: paths.hosts, atomically: true, encoding: .utf8)
         try controller.apply(BlockConfiguration(domains: ["reddit.com"]), helperSource: root)
         let changed = try String(contentsOf: paths.hosts)

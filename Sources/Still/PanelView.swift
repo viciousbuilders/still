@@ -157,7 +157,7 @@ struct PanelView: View {
             }
             if model.active && model.hasChanges {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Your blocklist has unapplied changes.").font(.system(size: 12)).foregroundStyle(secondary)
+                    Text(model.needsFirewallUpgrade ? "Apply changes to upgrade your active block." : "Your blocklist has unapplied changes.").font(.system(size: 12)).foregroundStyle(secondary)
                     Button { Task { await model.start(update: true) } } label: {
                         Text("Apply changes").frame(maxWidth: .infinity).padding(.vertical, 3)
                     }.disabled(model.websites.isEmpty || model.busy)
@@ -203,7 +203,7 @@ struct PanelView: View {
                 Text("Website blocking").font(.system(size: 12, weight: .semibold))
                 Text(verbatim: "Each domain includes its www version. Add other subdomains separately.")
                     .font(.system(size: 12)).foregroundStyle(secondary).fixedSize(horizontal: false, vertical: true)
-                Text("Uses your Mac’s hosts file. Restart your browser if a blocked website stays open. Secure DNS, VPNs, and proxies can bypass the block.")
+                Text("Blocks website lookups and server connections, including existing connections. Already downloaded content may remain visible. VPNs and proxies can bypass blocking.")
                     .font(.system(size: 12)).foregroundStyle(secondary).fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 8) {
