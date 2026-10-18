@@ -1,9 +1,9 @@
 import Foundation
 
 enum Administrator {
-    static func run(helper: URL, arguments: [String]) async throws {
+    static func run(helper: URL, arguments: [String], prompt: String = "Still needs permission to update your website block.") async throws {
         let command = ([helper.path] + arguments).map(shellQuote).joined(separator: " ")
-        let script = "do shell script \"\(appleScriptEscape(command))\" with administrator privileges with prompt \"Still needs permission to update your website block.\""
+        let script = "do shell script \"\(appleScriptEscape(command))\" with administrator privileges with prompt \"\(appleScriptEscape(prompt))\""
         try await Task.detached(priority: .userInitiated) {
             let process = Process(), output = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")

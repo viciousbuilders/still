@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import BlockerCore
 
 @main
 @MainActor
@@ -30,14 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 380, height: PanelView.panelHeight)
+        popover.contentSize = NSSize(width: 400, height: PanelView.panelHeight)
         popover.contentViewController = NSHostingController(rootView: PanelView(model: Self.model))
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem = item
         item.button?.target = self
         item.button?.action = #selector(togglePopover)
-        statusSubscription = Self.model.$hasHostsBlock.removeDuplicates().sink { [weak self] active in
-            self?.updateStatusItem(active: active)
+        statusSubscription = Publishers.CombineLatest3(Self.model.$hasHostsBlock, Self.model.focus.$session, Self.model.$now).sink { [weak self] active, session, now in
+            self?.updateStatusItem(active: active, session: session, now: now)
         }
 
         if Self.model.isDemo {
@@ -56,13 +57,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async { [weak self] in self?.showPopover() }
                 return
             }
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: PanelView.panelHeight), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: PanelView.panelHeight), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
             window.title = "Still preview"
             window.contentView = NSHostingView(rootView: PanelView(model: Self.model))
             window.center()
             window.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
             previewWindow = window
+            if let index = CommandLine.arguments.firstIndex(of: "--export-preview"),
+               CommandLine.arguments.indices.contains(index + 1) {
+                let destination = URL(fileURLWithPath: CommandLine.arguments[index + 1])
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    guard let view = window.contentView else { return }
+                    view.layoutSubtreeIfNeeded()
+                    view.displayIfNeeded()
+                    guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    do {
+                        guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
+                        try png.write(to: destination, options: .atomic)
+                    } catch {
+                        fputs("Could not export preview: \(error)\n", stderr)
+                    }
+                    NSApplication.shared.terminate(nil)
+                }
+            }
         }
     }
 
@@ -83,11 +102,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController?.view.window?.makeKey()
     }
 
-    private func updateStatusItem(active: Bool) {
-        let image = NSImage(systemSymbolName: active ? "shield.lefthalf.filled" : "shield", accessibilityDescription: "Still")
+    private func updateStatusItem(active: Bool, session: FocusSession?, now: Date) {
+        let image = NSImage(systemSymbolName: session != nil ? "timer" : active ? "shield.lefthalf.filled" : "shield", accessibilityDescription: "Still")
         image?.isTemplate = true
         statusItem?.button?.image = image
-        statusItem?.button?.toolTip = active ? "Still: website blocking active" : "Still: website blocker"
-        statusItem?.button?.setAccessibilityLabel(active ? "Still: website blocking active" : "Still: website blocker")
+        var detail = active ? "Still: website blocking active" : "Still: website blocker"
+        if let phase = session?.phase(at: now) {
+            let seconds = max(0, Int(ceil(phase.endsAt.timeIntervalSince(now))))
+            let time = String(format: "%d:%02d", seconds / 60, seconds % 60)
+            statusItem?.length = NSStatusItem.variableLength
+            statusItem?.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+            statusItem?.button?.title = " \(time)"
+            detail = "Still: \(phase.kind == .focus ? "Focus" : "Break") · \(time) remaining"
+        } else {
+            statusItem?.button?.title = ""
+            statusItem?.length = NSStatusItem.squareLength
+        }
+        statusItem?.button?.toolTip = detail
+        statusItem?.button?.setAccessibilityLabel(detail)
     }
 }
