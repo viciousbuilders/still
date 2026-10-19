@@ -50,7 +50,7 @@ struct SettingsView: View {
                 Text("The helper follows your timers even with Still closed. After sleep it catches up to the current phase. A helper restart can take up to 15 seconds.")
                     .font(.system(size: 12)).foregroundStyle(secondary).fixedSize(horizontal: false, vertical: true)
             }
-        }
+        }.onAppear { model.refreshLoginStatus() }
     }
 
 }

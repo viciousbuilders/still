@@ -108,8 +108,13 @@ struct GroupDetailView: View {
                     Text(model.selectedActiveGroup?.expiresAt == nil ? "Always on" : "Time remaining")
                         .font(.system(size: 12, weight: .medium))
                     Spacer()
-                    Text(model.statusDetail)
-                        .font(.system(size: 12)).monospacedDigit().foregroundStyle(secondary)
+                    if model.selectedActiveGroup?.expiresAt != nil {
+                        TimelineView(.periodic(from: .now, by: 1)) {
+                            Text(model.statusDetail(at: $0.date))
+                        }.font(.system(size: 12)).monospacedDigit().foregroundStyle(secondary)
+                    } else {
+                        Text(model.statusDetail()).font(.system(size: 12)).foregroundStyle(secondary)
+                    }
                 } else {
                     Text("Duration").font(.system(size: 12, weight: .medium))
                     Spacer()

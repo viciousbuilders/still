@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import ServiceManagement
 import BlockerCore
@@ -18,18 +19,23 @@ final class AppModel: ObservableObject {
     @Published var inputError: String?
     @Published var groupError: String?
     @Published var settingsError: String?
-    @Published var now = Date()
-    @Published var loginStatus = SMAppService.mainApp.status
+    @Published var loginStatus = SMAppService.Status.notRegistered
     @Published var showSettings = false
     let isDemo: Bool
     let focus: FocusModel
-    private var poller: Timer?
+    private var stateMonitor: StateMonitor?
+    private var demoTimer: Timer?
+    private var demoSubscription: AnyCancellable?
     private let defaults: UserDefaults
-    private static let stateURL = URL(fileURLWithPath: "/Library/Application Support/Still/active.json")
+    private let stateDirectory: URL
+    private let hostsURL: URL
 
-    init(demo: Bool = false, defaults: UserDefaults = .standard) {
+    init(demo: Bool = false, defaults: UserDefaults = .standard,
+         stateDirectory: URL = URL(fileURLWithPath: "/Library/Application Support/Still", isDirectory: true),
+         hostsURL: URL = URL(fileURLWithPath: "/private/etc/hosts")) {
         isDemo = demo; self.defaults = defaults
-        focus = FocusModel(demo: demo, defaults: defaults)
+        self.stateDirectory = stateDirectory; self.hostsURL = hostsURL
+        focus = FocusModel(demo: demo, defaults: defaults, directory: stateDirectory)
         if demo {
             groups = [BlockGroup(id: BlockGroup.legacyID, name: "Always blocked", domains: ["facebook.com", "threads.com", "tiktok.com"]),
                       BlockGroup(name: "Study", domains: ["instagram.com", "linkedin.com", "x.com"])]
@@ -42,9 +48,27 @@ final class AppModel: ObservableObject {
             savePreferences()
         }
         focus.refresh(groups: groups)
-        poller = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        if demo {
+            demoSubscription = focus.$session.map { $0 != nil }.removeDuplicates().sink { [weak self] running in
+                self?.updateDemoTimer(running: running)
+            }
+        } else {
+            refreshLoginStatus()
+            stateMonitor = StateMonitor(directories: [stateDirectory, hostsURL.deletingLastPathComponent()]) { [weak self] in
+                self?.refresh()
+            }
+        }
+    }
+
+    deinit { demoTimer?.invalidate() }
+
+    private func updateDemoTimer(running: Bool) {
+        demoTimer?.invalidate(); demoTimer = nil
+        guard running else { return }
+        demoTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.refresh() }
         }
+        demoTimer?.tolerance = 0.1
     }
 
     var selectedGroup: BlockGroup { groups.first { $0.id == selectedGroupID } ?? groups[0] }
@@ -69,13 +93,13 @@ final class AppModel: ObservableObject {
     }
     var selectedGroupActive: Bool { groupIsActive(selectedGroupID) }
     var needsFirewallUpgrade: Bool {
-        active && !isDemo && !FileManager.default.fileExists(atPath: "/Library/Application Support/Still/firewall.json")
+        active && !isDemo && !FileManager.default.fileExists(atPath: stateDirectory.appendingPathComponent("firewall.json").path)
     }
     var hasChanges: Bool {
         guard let applied = selectedActiveGroup else { return false }
         return needsFirewallUpgrade || websites.sorted() != applied.domains.sorted() || selectedGroup.name != applied.name
     }
-    var statusDetail: String {
+    func statusDetail(at now: Date = Date()) -> String {
         guard selectedGroupActive else { return "\(websites.count) websites ready to block." }
         guard let end = selectedActiveGroup?.expiresAt else { return "Until you unblock it" }
         let seconds = max(0, Int(ceil(end.timeIntervalSince(now))))
@@ -84,19 +108,20 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        now = Date()
         guard !busy else { return }
         if isDemo {
-            configuration = focus.advanceDemo(configuration: configuration, now: now)
-            hasHostsBlock = configuration != nil
+            let next = focus.advanceDemo(configuration: configuration, now: Date())
+            if configuration != next { configuration = next }
+            if hasHostsBlock != (configuration != nil) { hasHostsBlock = configuration != nil }
             focus.refresh(groups: groups)
             return
         }
-        let contents = try? String(contentsOfFile: "/private/etc/hosts", encoding: .utf8)
-        hasHostsBlock = contents.map(HostsFile.containsBlock) ?? false
-        if let data = try? Data(contentsOf: Self.stateURL) {
-            configuration = try? JSONDecoder().decode(BlockConfiguration.self, from: data).validated()
-        } else { configuration = nil }
+        let contents = try? String(contentsOf: hostsURL, encoding: .utf8)
+        let blocked = contents.map(HostsFile.containsBlock) ?? false
+        if hasHostsBlock != blocked { hasHostsBlock = blocked }
+        let next = (try? Data(contentsOf: stateDirectory.appendingPathComponent("active.json")))
+            .flatMap { try? JSONDecoder().decode(BlockConfiguration.self, from: $0).validated() }
+        if configuration != next { configuration = next }
         // Recover active groups if local preferences were removed or this user
         // opens a block started by a previous version of the app.
         if active, let configuration {
@@ -107,8 +132,13 @@ final class AppModel: ObservableObject {
                 groups[0].domains = configuration.domains
             }
         }
-        loginStatus = SMAppService.mainApp.status
         focus.refresh(groups: groups)
+    }
+
+    func refreshLoginStatus() {
+        guard !isDemo else { return }
+        let status = SMAppService.mainApp.status
+        if loginStatus != status { loginStatus = status }
     }
 
     func selectGroup(_ id: UUID) {
@@ -247,7 +277,7 @@ final class AppModel: ObservableObject {
         do {
             if enabled { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
-            loginStatus = SMAppService.mainApp.status; settingsError = nil
+            refreshLoginStatus(); settingsError = nil
         } catch { settingsError = error.localizedDescription }
     }
 

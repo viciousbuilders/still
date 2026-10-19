@@ -3,7 +3,7 @@ import BlockerCore
 
 struct GroupsView: View {
     @ObservedObject var model: AppModel
-    @State private var showingDetail = false
+    @Binding var showingDetail: Bool
     @State private var editingName = false
     @State private var creating = false
     @State private var name = ""

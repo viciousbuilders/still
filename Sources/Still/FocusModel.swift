@@ -18,10 +18,11 @@ final class FocusModel: ObservableObject {
     @Published var error: String?
     private let demo: Bool
     private let defaults: UserDefaults
-    private let directory = URL(fileURLWithPath: "/Library/Application Support/Still", isDirectory: true)
+    private let directory: URL
 
-    init(demo: Bool, defaults: UserDefaults) {
-        self.demo = demo; self.defaults = defaults
+    init(demo: Bool, defaults: UserDefaults,
+         directory: URL = URL(fileURLWithPath: "/Library/Application Support/Still", isDirectory: true)) {
+        self.demo = demo; self.defaults = defaults; self.directory = directory
         groupID = defaults.string(forKey: "focusGroupID").flatMap(UUID.init(uuidString:)) ?? BlockGroup.legacyID
         preset = FocusPreset(rawValue: defaults.integer(forKey: "focusPreset")) ?? .regular
         rounds = [1, 2, 4].contains(defaults.integer(forKey: "focusRounds")) ? defaults.integer(forKey: "focusRounds") : 4
@@ -29,14 +30,19 @@ final class FocusModel: ObservableObject {
 
     func refresh(groups: [BlockGroup]) {
         if !demo {
-            session = (try? Data(contentsOf: directory.appendingPathComponent("focus.json")))
+            let nextSession = (try? Data(contentsOf: directory.appendingPathComponent("focus.json")))
                 .flatMap { try? JSONDecoder().decode(FocusSession.self, from: $0).validated() }
-            garden = (try? Data(contentsOf: directory.appendingPathComponent("garden-\(getuid()).json")))
+            if session != nextSession { session = nextSession }
+            let nextGarden = (try? Data(contentsOf: directory.appendingPathComponent("garden-\(getuid()).json")))
                 .flatMap { try? JSONDecoder().decode(FocusGarden.self, from: $0) } ?? FocusGarden()
+            if garden != nextGarden { garden = nextGarden }
         }
-        if let session { groupID = session.plan.group.id }
+        if let session {
+            if groupID != session.plan.group.id { groupID = session.plan.group.id }
+        }
         else if !groups.contains(where: { $0.id == groupID }) || (groupID == BlockGroup.legacyID && !defaults.bool(forKey: "focusGroupChosen")) {
-            groupID = groups.first { $0.name.localizedCaseInsensitiveCompare("Study") == .orderedSame }?.id ?? groups[0].id
+            let nextID = groups.first { $0.name.localizedCaseInsensitiveCompare("Study") == .orderedSame }?.id ?? groups[0].id
+            if groupID != nextID { groupID = nextID }
         }
     }
 

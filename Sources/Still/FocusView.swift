@@ -7,7 +7,7 @@ struct FocusView: View {
     @Environment(\.colorScheme) private var scheme
     private var accent: Color { StillStyle.accent(scheme) }
     private var secondary: Color { StillStyle.secondary(scheme) }
-    private var phase: FocusPhase? { focus.session?.phase(at: model.now) }
+    private var phase: FocusPhase? { focus.session?.phase(at: Date()) }
     private var selected: BlockGroup? { model.groups.first { $0.id == focus.groupID } }
 
     var body: some View {
@@ -47,15 +47,23 @@ struct FocusView: View {
         }
     }
 
-    private var timer: some View {
-        HStack(alignment: .center, spacing: 20) {
+    @ViewBuilder private var timer: some View {
+        if focus.session != nil {
+            TimelineView(.periodic(from: .now, by: 1)) { timer(at: $0.date) }
+        } else { timer(at: Date()) }
+    }
+
+    private func timer(at now: Date) -> some View {
+        let phase = focus.session?.phase(at: now)
+        let remaining = timeRemaining(at: now)
+        return HStack(alignment: .center, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(phase?.kind == .rest ? "Break" : phase?.kind == .finished ? "Complete" : "Focus")
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(secondary)
-                Text(timeRemaining).font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit()
-                    .contentTransition(.identity).accessibilityLabel(focus.session == nil ? "\(focus.preset.rawValue) minute focus duration" : "\(timeRemaining) remaining")
+                Text(remaining).font(.system(size: 54, weight: .light, design: .rounded)).monospacedDigit()
+                    .contentTransition(.identity).accessibilityLabel(focus.session == nil ? "\(focus.preset.rawValue) minute focus duration" : "\(remaining) remaining")
                 if focus.session != nil {
-                    Text(phaseDescription).font(.system(size: 12)).foregroundStyle(secondary)
+                    Text(phaseDescription(at: now)).font(.system(size: 12)).foregroundStyle(secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -147,12 +155,14 @@ struct FocusView: View {
         }
     }
 
-    private var timeRemaining: String {
-        let seconds = phase.map { max(0, Int(ceil($0.endsAt.timeIntervalSince(model.now)))) } ?? focus.preset.rawValue * 60
-        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    private func timeRemaining(at now: Date) -> String {
+        let seconds = focus.session?.phase(at: now).endsAt.timeIntervalSince(now)
+        let remaining = seconds.map { max(0, Int(ceil($0))) } ?? focus.preset.rawValue * 60
+        return String(format: "%02d:%02d", remaining / 60, remaining % 60)
     }
-    private var phaseDescription: String {
-        guard let session = focus.session, let phase else { return "\(selected?.name ?? "This group") blocks during focus." }
+    private func phaseDescription(at now: Date) -> String {
+        guard let session = focus.session else { return "\(selected?.name ?? "This group") blocks during focus." }
+        let phase = session.phase(at: now)
         let blocked = model.groupIsActive(session.plan.group.id)
         switch phase.kind {
         case .focus: return blocked ? "\(session.plan.group.name) is blocked" : "Applying protection…"

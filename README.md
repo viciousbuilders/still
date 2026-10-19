@@ -27,6 +27,8 @@ In **Focus**, select the group to block during focus, choose **25/5** or **50/10
 
 The helper owns the schedule, so closing Still does not stop transitions. A sleeping Mac catches up to the current phase after waking. The menu bar shows the countdown while a cycle runs. **End cycle early** requires authentication, opens only the cycle's group, and preserves earned progress. Its website snapshot is fixed for the cycle; edits apply to the next one. Shared websites in another active group stay blocked during breaks, with an explanation in Focus.
 
+The menu bar app watches the helper's state files for changes, with a slower recovery check, and publishes updates only when values change. Countdown updates stay within the visible timer and menu bar. Closing the panel releases its SwiftUI views while preserving the selected tab, group navigation, and website input. Login-item status is checked when needed rather than every second.
+
 After three completed short focus blocks, Still suggests trying 50/10. After an interrupted long block, it suggests 25/5. Suggestions change your next cycle only when selected.
 
 **Garden** records focus minutes and grows one virtual tree per 25 recorded minutes. Partial progress carries into later cycles. Breaks, sleep, clock jumps, helper downtime, and intervals without the planned group applied earn no progress. The helper compares awake and wall clocks, checkpoints progress every five seconds, and archives completed or interrupted blocks without double counting. Garden data stays on this Mac; no account or cloud service is used.

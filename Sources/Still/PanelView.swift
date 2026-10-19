@@ -1,12 +1,18 @@
 import SwiftUI
 
-private enum PanelTab: String, CaseIterable {
+enum PanelTab: String, CaseIterable {
     case focus = "Focus", groups = "Groups", garden = "Garden"
+}
+
+@MainActor
+final class PanelNavigation: ObservableObject {
+    @Published var tab: PanelTab = .focus
+    @Published var showingGroupDetail = false
 }
 
 struct PanelView: View {
     @ObservedObject var model: AppModel
-    @State private var tab: PanelTab = .focus
+    @ObservedObject var navigation: PanelNavigation
     @Environment(\.colorScheme) private var scheme
     private var accent: Color { StillStyle.accent(scheme) }
     private var secondary: Color { StillStyle.secondary(scheme) }
@@ -18,14 +24,15 @@ struct PanelView: View {
                 Divider()
                 ScrollView { SettingsView(model: model).padding(20) }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Picker("Still view", selection: $tab) {
+                Picker("Still view", selection: $navigation.tab) {
                     ForEach(PanelTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented).labelsHidden().padding(.horizontal, 20).padding(.bottom, 4).disabled(model.busy)
                 Group {
-                    switch tab {
+                    switch navigation.tab {
                     case .focus: FocusView(model: model, focus: model.focus)
-                    case .groups: GroupsView(model: model)
-                    case .garden: GardenView(focus: model.focus, now: model.now)
+                    case .groups: GroupsView(model: model, showingDetail: $navigation.showingGroupDetail)
+                    case .garden:
+                        TimelineView(.everyMinute) { GardenView(focus: model.focus, now: $0.date) }
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
