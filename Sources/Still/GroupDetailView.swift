@@ -125,7 +125,7 @@ struct GroupDetailView: View {
             }
             if model.selectedGroupActive && model.hasChanges && !model.groupIsManagedByTimer(model.selectedGroupID) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(model.needsFirewallUpgrade ? "Apply changes to upgrade your active block." : "This group has unapplied changes.").font(.system(size: 12)).foregroundStyle(secondary)
+                    Text((model.needsFirewallUpgrade || model.needsHostsUpgrade) ? "Apply changes to upgrade your active block." : "This group has unapplied changes.").font(.system(size: 12)).foregroundStyle(secondary)
                     Button { Task { await model.start(update: true) } } label: {
                         Text("Apply changes").frame(maxWidth: .infinity).padding(.vertical, 3)
                     }.disabled(model.websites.isEmpty || model.busy)

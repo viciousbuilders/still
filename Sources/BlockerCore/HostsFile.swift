@@ -1,6 +1,11 @@
 import Foundation
 
 public enum HostsFile {
+    // Non-local destinations, explicitly rejected by Still's PF table.
+    // Loopback/unspecified addresses can reach a local HTTPS development server.
+    public static let blockedIPv4 = "192.0.2.1"
+    public static let blockedIPv6 = "100::1"
+
     public static let begin = "# BEGIN STILL WEBSITE BLOCKER"
     public static let end = "# END STILL WEBSITE BLOCKER"
 
@@ -20,7 +25,7 @@ public enum HostsFile {
         var output = try removingBlock(from: original)
         if !output.isEmpty && !output.hasSuffix("\n") { output += "\n" }
         output += begin + "\n"
-        for host in expanded { output += "0.0.0.0 \(host)\n::1 \(host)\n" }
+        for host in expanded { output += "\(blockedIPv4) \(host)\n\(blockedIPv6) \(host)\n" }
         output += end + "\n"
         return output
     }

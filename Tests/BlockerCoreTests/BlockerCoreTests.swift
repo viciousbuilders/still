@@ -18,9 +18,19 @@ final class BlockerCoreTests: XCTestCase {
     func testBlockRoundTripPreservesExistingContent() throws {
         let original = "## Host Database\n127.0.0.1 localhost\n::1 localhost\n\n# Another tool\n10.0.0.2 intranet.company.com\n"
         let blocked = try HostsFile.applying(["reddit.com"], to: original)
-        XCTAssertTrue(blocked.contains("0.0.0.0 www.reddit.com\n::1 www.reddit.com"))
+        XCTAssertTrue(blocked.contains("192.0.2.1 www.reddit.com\n100::1 www.reddit.com"))
         XCTAssertEqual(try HostsFile.removingBlock(from: blocked), original)
         XCTAssertEqual(try HostsFile.applying(["reddit.com"], to: blocked), blocked)
+    }
+
+    func testLegacyLoopbackEntriesAreReplacedWithoutChangingLocalServers() throws {
+        let original = "127.0.0.1 localhost\n::1 localhost\n127.0.0.1 app.test\n"
+        let legacy = original + HostsFile.begin + "\n0.0.0.0 reddit.com\n::1 reddit.com\n" + HostsFile.end + "\n"
+        let updated = try HostsFile.applying(["reddit.com"], to: legacy)
+        XCTAssertFalse(updated.contains("0.0.0.0 reddit.com"))
+        XCTAssertFalse(updated.contains("::1 reddit.com"))
+        XCTAssertTrue(updated.contains("192.0.2.1 reddit.com\n100::1 reddit.com\n"))
+        XCTAssertEqual(try HostsFile.removingBlock(from: updated), original)
     }
 
     func testUpdateReplacesOnlyOurSectionAndPreservesLaterEdits() throws {

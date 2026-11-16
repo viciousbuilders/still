@@ -21,6 +21,25 @@ final class RefreshTests: XCTestCase {
         XCTAssertEqual(model.focus.garden.records.count, 1)
     }
 
+    @MainActor func testLegacyHostsOfferApplyChangesEvenWithExistingFirewall() throws {
+        let fixture = try StateFixture()
+        defer { fixture.cleanUp() }
+        try fixture.write(["installed": true], to: "firewall.json")
+        let hosts = fixture.directory.appendingPathComponent("hosts")
+        let current = try String(contentsOf: hosts)
+        let legacy = current.replacingOccurrences(of: "192.0.2.1 ", with: "0.0.0.0 ")
+            .replacingOccurrences(of: "100::1 ", with: "::1 ")
+        try legacy.write(to: hosts, atomically: true, encoding: .utf8)
+        let model = fixture.makeModel()
+        XCTAssertFalse(model.needsFirewallUpgrade)
+        XCTAssertTrue(model.needsHostsUpgrade)
+        XCTAssertTrue(model.hasChanges)
+        try current.write(to: hosts, atomically: true, encoding: .utf8)
+        model.refresh()
+        XCTAssertFalse(model.needsHostsUpgrade)
+        XCTAssertFalse(model.hasChanges)
+    }
+
     @MainActor func testAtomicFocusCheckpointsAndRemovalReachTheModelWithoutPolling() async throws {
         let fixture = try StateFixture()
         defer { fixture.cleanUp() }

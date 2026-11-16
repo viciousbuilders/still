@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     @Published var input = ""
     @Published var configuration: BlockConfiguration?
     @Published var hasHostsBlock = false
+    @Published private(set) var needsHostsUpgrade = false
     @Published var busy = false
     @Published var error: String?
     @Published var inputError: String?
@@ -97,7 +98,7 @@ final class AppModel: ObservableObject {
     }
     var hasChanges: Bool {
         guard let applied = selectedActiveGroup else { return false }
-        return needsFirewallUpgrade || websites.sorted() != applied.domains.sorted() || selectedGroup.name != applied.name
+        return needsHostsUpgrade || needsFirewallUpgrade || websites.sorted() != applied.domains.sorted() || selectedGroup.name != applied.name
     }
     func statusDetail(at now: Date = Date()) -> String {
         guard selectedGroupActive else { return "\(websites.count) websites ready to block." }
@@ -122,6 +123,12 @@ final class AppModel: ObservableObject {
         let next = (try? Data(contentsOf: stateDirectory.appendingPathComponent("active.json")))
             .flatMap { try? JSONDecoder().decode(BlockConfiguration.self, from: $0).validated() }
         if configuration != next { configuration = next }
+        let hostsUpgrade = blocked && contents.map { current in
+            guard let domains = next?.domains,
+                  let expected = try? HostsFile.applying(domains, to: current) else { return false }
+            return expected != current
+        } == true
+        if needsHostsUpgrade != hostsUpgrade { needsHostsUpgrade = hostsUpgrade }
         // Recover active groups if local preferences were removed or this user
         // opens a block started by a previous version of the app.
         if active, let configuration {

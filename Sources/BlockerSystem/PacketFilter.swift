@@ -74,7 +74,7 @@ final class PacketFilter: FirewallManaging {
         try ensureEnabled()
         // -F states would disrupt every connection. Kill only states whose
         // destination is a blocked server, for both address families.
-        for address in state.addresses {
+        for address in Self.blockedAddresses(state.addresses) {
             try command(["-k", address.contains(":") ? "::/0" : "0.0.0.0/0", "-k", address])
         }
         try write(try JSONEncoder().encode(state), to: stateURL)
@@ -208,8 +208,12 @@ final class PacketFilter: FirewallManaging {
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
     }
 
+    private static func blockedAddresses(_ addresses: [String]) -> [String] {
+        Array(Set(addresses + [HostsFile.blockedIPv4, HostsFile.blockedIPv6])).sorted()
+    }
+
     static func rules(for addresses: [String]) -> String {
-        "table <still_blocked> persist { \(addresses.joined(separator: ", ")) }\n"
+        "table <still_blocked> persist { \(blockedAddresses(addresses).joined(separator: ", ")) }\n"
         + "block return out quick proto { tcp, udp } from any to <still_blocked>\n"
         + "block return in quick proto { tcp, udp } from <still_blocked> to any\n"
     }
