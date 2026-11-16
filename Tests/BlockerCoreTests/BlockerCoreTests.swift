@@ -28,7 +28,7 @@ final class BlockerCoreTests: XCTestCase {
         let legacy = original + HostsFile.begin + "\n0.0.0.0 reddit.com\n::1 reddit.com\n" + HostsFile.end + "\n"
         let updated = try HostsFile.applying(["reddit.com"], to: legacy)
         XCTAssertFalse(updated.contains("0.0.0.0 reddit.com"))
-        XCTAssertFalse(updated.contains("::1 reddit.com"))
+        XCTAssertFalse(updated.split(separator: "\n").contains("::1 reddit.com"))
         XCTAssertTrue(updated.contains("192.0.2.1 reddit.com\n100::1 reddit.com\n"))
         XCTAssertEqual(try HostsFile.removingBlock(from: updated), original)
     }
